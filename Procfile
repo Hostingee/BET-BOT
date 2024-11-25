@@ -1,1 +1,1 @@
-worker: python3 -m src.userbot
+worker: python3 -m bot
