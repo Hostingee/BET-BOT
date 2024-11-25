@@ -1,2 +1,2 @@
-userbot: python3 -m userbot
-forwardingbot: python3 -m forwarding_bot
+worker: python3 -m userbot
+worker2: python3 -m forwarding_bot
