@@ -8,6 +8,7 @@ from telethon.tl.types import PhotoStrippedSize
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import Application, MessageHandler, ContextTypes, filters
 import logging
+from aiohttp import web
 
 # Enable logging
 logging.basicConfig(
@@ -163,15 +164,31 @@ async def start_telegram_bot():
             print("Retrying Telegram bot connection in 5 seconds...")
             await asyncio.sleep(5)
 
+async def health_check(request):
+    """Health check endpoint."""
+    return web.Response(text="OK", status=200)
+
+async def start_health_server():
+    """Starts a lightweight HTTP server for health checks."""
+    app = web.Application()
+    app.add_routes([web.get("/", health_check)])  # Responds to GET requests on '/'
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 8000)  # Listen on port 8000
+    await site.start()
+    print("Health check server running on port 8000")
+
 async def main():
     # Run both clients concurrently with retry mechanisms
     task_telethon = asyncio.create_task(start_telethon_client())
     task_bot = asyncio.create_task(start_telegram_bot())
+    task_health_check = asyncio.create_task(start_health_server())
 
-    # Wait for both to run concurrently
+    # Wait for all tasks to run concurrently
     await asyncio.gather(
         task_telethon,
         task_bot,
+        task_health_check
     )
 
     # Keep both clients running
