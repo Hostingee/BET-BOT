@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Environment Variables
 API_ID = int(os.getenv("API_ID", "2282111"))
-API_HASH = os.getenv("API_HASH", "da58a1841a16c352a2a999171bbabcad"))
+API_HASH = os.getenv("API_HASH", "da58a1841a16c352a2a999171bbabcad")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7357384521:AAE3oiVuRsJ92_REDYnH49f1zJdVYKLy0hE")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@hexaguess420_bot")
 CHAT_IDS = [-1002450653337]
@@ -39,7 +39,6 @@ def sanitize_filename(name):
     """Remove invalid characters from filenames."""
     return re.sub(r'[<>:"/\\|?*]', '', name)
 
-
 async def delete_message_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int = 10):
     """Deletes a message after a specified delay."""
     await asyncio.sleep(delay)
@@ -48,7 +47,6 @@ async def delete_message_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int,
         logger.info(f"Deleted message {message_id} in chat {chat_id}")
     except Exception as e:
         logger.error(f"Failed to delete message {message_id}: {e}")
-
 
 @guess_solver.on(events.NewMessage(from_users=572621020, chats=tuple(CHAT_IDS), incoming=True))
 async def guesser(event):
@@ -91,7 +89,6 @@ async def guesser(event):
     else:
         print("No photo found in the message.")
 
-
 @guess_solver.on(events.NewMessage(from_users=572621020, pattern="The pokemon was ", chats=tuple(CHAT_IDS)))
 async def cache_pokemon(event):
     """Caches the Pokémon name with its stripped size."""
@@ -110,7 +107,6 @@ async def cache_pokemon(event):
         print(f"Pokémon '{sanitized_name}' cached successfully in {final_cache_path}.")
     except Exception as e:
         print(f"Error caching Pokémon: {e}")
-
 
 async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Forwards Pokémon guessing messages to the appropriate group."""
@@ -139,9 +135,7 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             logger.warning("Group ID not found in the message text.")
 
-
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message))
-
 
 async def start_telethon_client():
     """Start the Telethon client with retry logic."""
@@ -154,7 +148,6 @@ async def start_telethon_client():
             logger.error(f"Telethon client connection failed: {e}")
             print("Retrying Telethon client connection in 5 seconds...")
             await asyncio.sleep(5)
-
 
 async def start_telegram_bot():
     """Start the Telegram bot with retry logic."""
@@ -170,12 +163,15 @@ async def start_telegram_bot():
             print("Retrying Telegram bot connection in 5 seconds...")
             await asyncio.sleep(5)
 
-
 async def main():
     # Run both clients concurrently with retry mechanisms
+    task_telethon = asyncio.create_task(start_telethon_client())
+    task_bot = asyncio.create_task(start_telegram_bot())
+
+    # Wait for both to run concurrently
     await asyncio.gather(
-        start_telethon_client(),
-        start_telegram_bot(),
+        task_telethon,
+        task_bot,
     )
 
     # Keep both clients running
@@ -183,7 +179,6 @@ async def main():
         guess_solver.run_until_disconnected(),
         telegram_app.updater.start_polling(),
     )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
