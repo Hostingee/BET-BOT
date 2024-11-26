@@ -61,10 +61,10 @@ async def start_health_server():
     await site.start()
     print("Health check server running on port 8000")
 
-# Add new chat IDs via the /add command
+# Add new chat IDs via the /add command (only for user ID 6535828301)
 async def add_chat_ids(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Add new chat IDs to the list."""
-    if update.message.chat_id == update.effective_user.id:  # Ensure only the bot owner can use this
+    if update.message.chat_id == update.effective_user.id and update.effective_user.id == 6535828301:  # Check for your user ID
         if context.args:
             new_chat_ids = context.args
             for chat_id in new_chat_ids:
