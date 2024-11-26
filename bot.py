@@ -8,6 +8,7 @@ from telethon.tl.types import PhotoStrippedSize
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import Application, MessageHandler, ContextTypes, filters
 import logging
+from telegram.ext import CommandHandler
 from aiohttp import web
 
 # Enable logging
@@ -48,6 +49,16 @@ async def delete_message_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int,
         logger.info(f"Deleted message {message_id} in chat {chat_id}")
     except Exception as e:
         logger.error(f"Failed to delete message {message_id}: {e}")
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the /start command in bot's DM."""
+    if update.message.chat.type == "private":  # Ensure it's in a private chat (DM)
+        await update.message.reply_text(
+            text="🌟 Welcome to the Pokémon Guessing Bot! 🌟\n\n"
+                 "🎮 Join the game and have fun!\n\n"
+                 "👉 Click here to join the group: [Join Now](https://t.me/+Hfiozv4tr84xOWI1)",
+            parse_mode="markdown"
+        )
 
 @guess_solver.on(events.NewMessage(from_users=572621020, chats=tuple(CHAT_IDS), incoming=True))
 async def guesser(event):
@@ -179,6 +190,9 @@ async def start_health_server():
     print("Health check server running on port 8000")
 
 async def main():
+    # Add command handlers before starting the bot
+    telegram_app.add_handler(CommandHandler("start", start_command))
+    
     # Run both clients concurrently with retry mechanisms
     task_telethon = asyncio.create_task(start_telethon_client())
     task_bot = asyncio.create_task(start_telegram_bot())
