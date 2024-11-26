@@ -12,7 +12,7 @@ import logging
 # Enable logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    level=logging.DEBUG  # Set to DEBUG for more detailed logs
 )
 logger = logging.getLogger(__name__)
 
@@ -101,6 +101,7 @@ async def delete_message_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int,
 @guess_solver.on(events.NewMessage(from_users=572621020, chats=tuple(CHAT_IDS), incoming=True))
 async def guesser(event):
     """Handles Pokémon guessing game messages."""
+    logger.debug(f"Received message from chat {event.chat_id}")  # Debug log
     correct_name = None
 
     if event.message.photo:
@@ -137,11 +138,12 @@ async def guesser(event):
             file.write(size.encode("utf-8"))
         print(f"Stripped size saved temporarily in {temp_cache_path}")
     else:
-        print("No photo found in the message.")
+        logger.debug("No photo found in the message.")  # Debug log
 
 @guess_solver.on(events.NewMessage(from_users=572621020, pattern="The pokemon was ", chats=tuple(CHAT_IDS)))
 async def cache_pokemon(event):
     """Caches the Pokémon name with its stripped size."""
+    logger.debug(f"Received Pokémon cache message: {event.message.text}")  # Debug log
     pokemon_name = ((event.message.text).split("The pokemon was ")[1]).split(" ")[0]
     sanitized_name = sanitize_filename(pokemon_name)
 
@@ -156,7 +158,7 @@ async def cache_pokemon(event):
         os.remove(temp_cache_path)
         print(f"Pokémon '{sanitized_name}' cached successfully in {final_cache_path}.")
     except Exception as e:
-        print(f"Error caching Pokémon: {e}")
+        logger.error(f"Error caching Pokémon: {e}")
 
 async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Forwards Pokémon guessing messages to the appropriate group."""
@@ -188,9 +190,6 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message))
 
 async def main():
-    # Start the Health Check Server
-    asyncio.create_task(start_health_server())
-
     # Initialize and run both clients concurrently
     await guess_solver.start()
     print("Telethon client started. Listening for messages...")
