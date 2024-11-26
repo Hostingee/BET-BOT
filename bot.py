@@ -5,7 +5,8 @@ import asyncio
 from telethon import events, TelegramClient
 from telethon.tl.types import PhotoStrippedSize
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
-from telegram.ext import Application, MessageHandler, ContextTypes, filters
+from telegram.ext import Application, MessageHandler, ContextTypes, filters, CommandHandler
+from aiohttp import web
 import logging
 
 # Enable logging
@@ -20,7 +21,7 @@ API_ID = int(os.getenv("API_ID", "2282111"))
 API_HASH = os.getenv("API_HASH", "da58a1841a16c352a2a999171bbabcad")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7357384521:AAE3oiVuRsJ92_REDYnH49f1zJdVYKLy0hE")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@hexaguess420_bot")
-CHAT_IDS = [-1002450653337]
+CHAT_IDS = []
 
 # Directories
 TEMP_CACHE_DIR = "BET BOT/cache"
@@ -34,11 +35,59 @@ guess_solver = TelegramClient("temp", API_ID, API_HASH)
 # Initialize Telegram Bot API Application
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
+# Load chat IDs from file
+def load_chat_ids():
+    """Load chat IDs from file."""
+    if os.path.exists("chat_ids.txt"):
+        with open("chat_ids.txt", "r") as file:
+            return [int(line.strip()) for line in file.readlines()]
+    return []
+
+CHAT_IDS = load_chat_ids()
+
+# Health check function to respond with a simple "OK" message
+async def health_check(request):
+    """Health check endpoint."""
+    return web.Response(text="OK", status=200)
+
+# Start the health server in the background
+async def start_health_server():
+    """Starts a lightweight HTTP server for health checks."""
+    app = web.Application()
+    app.add_routes([web.get("/", health_check)])  # Responds to GET requests on '/'
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 8000)  # Listen on port 8000
+    await site.start()
+    print("Health check server running on port 8000")
+
+# Add new chat IDs via the /add command
+async def add_chat_ids(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Add new chat IDs to the list."""
+    if update.message.chat_id == update.effective_user.id:  # Ensure only the bot owner can use this
+        if context.args:
+            new_chat_ids = context.args
+            for chat_id in new_chat_ids:
+                try:
+                    # Add the chat ID to the list and save it to the file
+                    CHAT_IDS.append(int(chat_id))
+                    with open("chat_ids.txt", "a") as file:
+                        file.write(f"{chat_id}\n")
+                    await update.message.reply_text(f"Chat ID {chat_id} added successfully!")
+                except ValueError:
+                    await update.message.reply_text(f"Invalid Chat ID: {chat_id}")
+        else:
+            await update.message.reply_text("Please provide one or more Chat IDs to add.")
+    else:
+        await update.message.reply_text("You do not have permission to add Chat IDs.")
+
+# Add the handler for the /add command
+add_chat_ids_handler = CommandHandler("add", add_chat_ids)
+telegram_app.add_handler(add_chat_ids_handler)
 
 def sanitize_filename(name):
     """Remove invalid characters from filenames."""
     return re.sub(r'[<>:"/\\|?*]', '', name)
-
 
 async def delete_message_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int = 10):
     """Deletes a message after a specified delay."""
@@ -48,7 +97,6 @@ async def delete_message_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int,
         logger.info(f"Deleted message {message_id} in chat {chat_id}")
     except Exception as e:
         logger.error(f"Failed to delete message {message_id}: {e}")
-
 
 @guess_solver.on(events.NewMessage(from_users=572621020, chats=tuple(CHAT_IDS), incoming=True))
 async def guesser(event):
@@ -91,7 +139,6 @@ async def guesser(event):
     else:
         print("No photo found in the message.")
 
-
 @guess_solver.on(events.NewMessage(from_users=572621020, pattern="The pokemon was ", chats=tuple(CHAT_IDS)))
 async def cache_pokemon(event):
     """Caches the Pokémon name with its stripped size."""
@@ -110,7 +157,6 @@ async def cache_pokemon(event):
         print(f"Pokémon '{sanitized_name}' cached successfully in {final_cache_path}.")
     except Exception as e:
         print(f"Error caching Pokémon: {e}")
-
 
 async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Forwards Pokémon guessing messages to the appropriate group."""
@@ -139,11 +185,12 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             logger.warning("Group ID not found in the message text.")
 
-
 telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message))
 
-
 async def main():
+    # Start the Health Check Server
+    asyncio.create_task(start_health_server())
+
     # Initialize and run both clients concurrently
     await guess_solver.start()
     print("Telethon client started. Listening for messages...")
@@ -158,7 +205,6 @@ async def main():
         guess_solver.run_until_disconnected(),
         telegram_app.updater.start_polling(),
     )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
