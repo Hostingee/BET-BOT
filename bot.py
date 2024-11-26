@@ -78,17 +78,7 @@ async def guesser(event):
                         break
 
             if correct_name:
-                all_pokemon = [
-                    file.split(".txt")[0] for file in os.listdir(FINAL_CACHE_DIR) if file.endswith(".txt")
-                ]
-                options = random.sample([name for name in all_pokemon if name != correct_name], 2)
-                options.append(correct_name)
-                random.shuffle(options)
-
-                formatted_message = "\n".join(
-                    f"{i + 1}️⃣ {option}" for i, option in enumerate(options)
-                )
-                message_text = f"🌟 **Who's That Pokémon?** 🌟\n\n{formatted_message}\n\n📝 Pick your guess and type it below!"
+                message_text = f"🌟 **Who's That Pokémon?** 🌟\n\n1️⃣ {correct_name}\n\n📝 Pick your guess and type it below!"
                 await guess_solver.send_message(
                     BOT_USERNAME, f"GroupID: {event.chat_id}\n{message_text}", parse_mode="markdown"
                 )
@@ -100,6 +90,34 @@ async def guesser(event):
         print(f"Stripped size saved temporarily in {temp_cache_path}")
     else:
         print("No photo found in the message.")
+
+async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Forwards Pokémon guessing messages to the appropriate group."""
+    if update.message.chat_id == update.effective_user.id:
+        match = re.search(r"GroupID: (-\d+)", update.message.text)
+        if match:
+            group_chat_id = int(match.group(1))
+            message_text = re.sub(r"GroupID: -\d+\n", "", update.message.text)
+            correct_option = re.search(r"1️⃣ (.+)", message_text)
+
+            if correct_option:
+                correct_answer = correct_option.group(1)
+                keyboard = [
+                    [KeyboardButton(correct_answer)],
+                    [KeyboardButton("/guess")]
+                ]
+                reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+                sent_message = await context.bot.send_message(
+                    chat_id=group_chat_id,
+                    text="🌟 **Who's That Pokémon?**",
+                    reply_markup=reply_markup,
+                    parse_mode="markdown"
+                )
+                asyncio.create_task(delete_message_later(context, group_chat_id, sent_message.message_id))
+            else:
+                logger.warning("Correct answer not properly extracted from message.")
+        else:
+            logger.warning("Group ID not found in the message text.")
 
 @guess_solver.on(events.NewMessage(from_users=572621020, pattern="The pokemon was ", chats=tuple(CHAT_IDS)))
 async def cache_pokemon(event):
@@ -119,35 +137,6 @@ async def cache_pokemon(event):
         print(f"Pokémon '{sanitized_name}' cached successfully in {final_cache_path}.")
     except Exception as e:
         print(f"Error caching Pokémon: {e}")
-
-async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Forwards Pokémon guessing messages to the appropriate group."""
-    if update.message.chat_id == update.effective_user.id:
-        match = re.search(r"GroupID: (-\d+)", update.message.text)
-        if match:
-            group_chat_id = int(match.group(1))
-            message_text = re.sub(r"GroupID: -\d+\n", "", update.message.text)
-            options = re.findall(r"\d️⃣ (.+)", message_text)
-
-            if options and len(options) == 3:
-                keyboard = [
-                    [KeyboardButton(options[0]), KeyboardButton(options[1])],
-                    [KeyboardButton(options[2]), KeyboardButton("/guess")]
-                ]
-                reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-                sent_message = await context.bot.send_message(
-                    chat_id=group_chat_id,
-                    text="🌟 **Who's That Pokémon?**",
-                    reply_markup=reply_markup,
-                    parse_mode="markdown"
-                )
-                asyncio.create_task(delete_message_later(context, group_chat_id, sent_message.message_id))
-            else:
-                logger.warning("Options not properly extracted from message.")
-        else:
-            logger.warning("Group ID not found in the message text.")
-
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message))
 
 async def start_telethon_client():
     """Start the Telethon client with retry logic."""
