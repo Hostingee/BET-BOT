@@ -144,11 +144,19 @@ telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward
 
 
 async def main():
+    # Initialize and run both clients concurrently
     await guess_solver.start()
     print("Telethon client started. Listening for messages...")
+
+    await telegram_app.initialize()
+    print("Telegram Bot Application initialized.")
+
+    await telegram_app.start()
+    print("Telegram Bot Application started.")
+
     await asyncio.gather(
         guess_solver.run_until_disconnected(),
-        telegram_app.run_polling()
+        telegram_app.updater.start_polling(),
     )
 
 
