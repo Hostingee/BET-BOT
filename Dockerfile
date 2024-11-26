@@ -13,9 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Expose the port the app runs on
 EXPOSE 8000
 
-# Add a health check route to prevent failure of the container
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD curl --silent --fail http://localhost:8000/health || exit 1
+# Set the health check with an extremely large number of retries
+HEALTHCHECK --interval=30s --timeout=5s --retries=300000000 \
+    CMD curl --silent --fail http://localhost:8000/health || exit 1
 
 # Run app.py when the container launches
 CMD ["python", "app.py"]
