@@ -1,284 +1,178 @@
-from pymongo import MongoClient
-import asyncio
 import os
+import random
+import re
+import asyncio
+import time
+from telethon import events, TelegramClient
+from telethon.tl.types import PhotoStrippedSize
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
+from telegram.ext import Application, MessageHandler, ContextTypes, filters
 import logging
-from datetime import datetime
-from telegram import Update
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, CallbackQuery
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, CallbackContext, filters
-from token_1 import token
 
-from genshin_game import pull, bag, reward_primos, add_primos, leaderboard, handle_message, button, reset_bag_data, drop_primos
-# Global variables
-OWNER_ID = 5667016949
-
+# Enable logging
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-client = MongoClient('mongodb+srv://Joybot:Joybot123@joybot.toar6.mongodb.net/?retryWrites=true&w=majority&appName=Joybot') 
-db = client['telegram_bot']
-users_collection = db['users']
-genshin_collection = db['genshin_users']
+# Environment Variables
+API_ID = int(os.getenv("API_ID", "2282111"))
+API_HASH = os.getenv("API_HASH", "da58a1841a16c352a2a999171bbabcad")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "7357384521:AAE3oiVuRsJ92_REDYnH49f1zJdVYKLy0hE")
+BOT_USERNAME = os.getenv("BOT_USERNAME", "@hexaguess420_bot")
+CHAT_IDS = [-1002450653337]
 
-# MongoDB management functions
-def get_user_by_id(user_id):
-    return users_collection.find_one({"user_id": user_id})
+# Directories
+TEMP_CACHE_DIR = "BET BOT/cache"
+FINAL_CACHE_DIR = "cache"
+os.makedirs(TEMP_CACHE_DIR, exist_ok=True)
+os.makedirs(FINAL_CACHE_DIR, exist_ok=True)
 
-def save_user(user_data):
-    users_collection.update_one({"user_id": user_data["user_id"]}, {"$set": user_data}, upsert=True)
+# Initialize Telethon Client
+guess_solver = TelegramClient("temp", API_ID, API_HASH)
 
-def get_genshin_user_by_id(user_id):
-    return genshin_collection.find_one({"user_id": user_id})
+# Initialize Telegram Bot API Application
+telegram_app = Application.builder().token(BOT_TOKEN).build()
 
-def save_genshin_user(user_data):
-    genshin_collection.update_one({"user_id": user_data["user_id"]}, {"$set": user_data}, upsert=True)
+def sanitize_filename(name):
+    """Remove invalid characters from filenames."""
+    return re.sub(r'[<>:"/\\|?*]', '', name)
 
-async def start(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-    user_id = str(user.id)
-    first_name = user.first_name  # Get user's first name
+async def delete_message_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int = 10):
+    """Deletes a message after a specified delay."""
+    await asyncio.sleep(delay)
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        logger.info(f"Deleted message {message_id} in chat {chat_id}")
+    except Exception as e:
+        logger.error(f"Failed to delete message {message_id}: {e}")
 
-    # Save in general users collection
-    existing_user = get_user_by_id(user_id)
+@guess_solver.on(events.NewMessage(from_users=572621020, chats=tuple(CHAT_IDS), incoming=True))
+async def guesser(event):
+    """Handles Pokémon guessing game messages."""
+    correct_name = None
 
-    if existing_user is None:
-        new_user = {
-            "user_id": user_id,
-            "first_name": first_name,  # Save the first name
-            "join_date": datetime.now().strftime('%m/%d/%y'),
-            "credits": 5000,
-            "daily": None,
-            "win": 0,
-            "loss": 0,
-            "achievement": [],
-            "faction": "None",
-            "ban": None,
-            "title": "None",
-            "primos": 0,
-            "bag": {}
-        }
-        save_user(new_user)
-        logger.info(f"User {user_id} started the bot with first name: {first_name}.")
+    if event.message.photo:
+        for size in event.message.photo.sizes:
+            if isinstance(size, PhotoStrippedSize):
+                size = str(size)
 
-        await update.message.reply_text(
-            f"Welcome {first_name}! You've received 5000 credits to start betting. Use /profile to check your details."
-        )
+            for file in os.listdir(FINAL_CACHE_DIR):
+                with open(f"{FINAL_CACHE_DIR}/{file}", "rb") as f:
+                    file_content = f.read()
+                    if file_content == size.encode("utf-8"):
+                        correct_name = file.split(".txt")[0]
+                        break
+
+            if correct_name:
+                all_pokemon = [
+                    file.split(".txt")[0] for file in os.listdir(FINAL_CACHE_DIR) if file.endswith(".txt")
+                ]
+                options = random.sample([name for name in all_pokemon if name != correct_name], 2)
+                options.append(correct_name)
+                random.shuffle(options)
+
+                formatted_message = "\n".join(
+                    f"{i + 1}️⃣ {option}" for i, option in enumerate(options)
+                )
+                message_text = f"🌟 **Who's That Pokémon?** 🌟\n\n{formatted_message}\n\n📝 Pick your guess and type it below!"
+                await guess_solver.send_message(
+                    BOT_USERNAME, f"GroupID: {event.chat_id}\n{message_text}", parse_mode="markdown"
+                )
+            break
+
+        temp_cache_path = f"{TEMP_CACHE_DIR}/cache.txt"
+        with open(temp_cache_path, "wb") as file:
+            file.write(size.encode("utf-8"))
+        print(f"Stripped size saved temporarily in {temp_cache_path}")
     else:
-        logger.info(f"User {user_id} ({first_name}) already exists.")
-        await update.message.reply_text(
-            f"Welcome back, {first_name}! Use /profile to view your details."
-        )
+        print("No photo found in the message.")
 
-    # Save in genshin_users collection
-    existing_genshin_user = get_genshin_user_by_id(user_id)
+@guess_solver.on(events.NewMessage(from_users=572621020, pattern="The pokemon was ", chats=tuple(CHAT_IDS)))
+async def cache_pokemon(event):
+    """Caches the Pokémon name with its stripped size."""
+    pokemon_name = ((event.message.text).split("The pokemon was ")[1]).split(" ")[0]
+    sanitized_name = sanitize_filename(pokemon_name)
 
-    if existing_genshin_user is None:
-        new_genshin_user = {
-            "user_id": user_id,
-            "first_name": first_name,  # Save the first name in Genshin users
-            "primos": 16000,  # Adjust initial primogems as needed
-            "bag": {}
-        }
-        save_genshin_user(new_genshin_user)
-        logger.info(f"Genshin user {user_id} initialized with first name: {first_name}.")
-    else:
-        logger.info(f"Genshin user {user_id} ({first_name}) already exists.")
+    temp_cache_path = f"{TEMP_CACHE_DIR}/cache.txt"
+    final_cache_path = f"{FINAL_CACHE_DIR}/{sanitized_name}.txt"
 
+    try:
+        with open(temp_cache_path, "rb") as inf:
+            file_content = inf.read()
+            with open(final_cache_path, "wb") as file:
+                file.write(file_content)
+        os.remove(temp_cache_path)
+        print(f"Pokémon '{sanitized_name}' cached successfully in {final_cache_path}.")
+    except Exception as e:
+        print(f"Error caching Pokémon: {e}")
 
-async def profile(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-    user_id = str(user.id)
+async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Forwards Pokémon guessing messages to the appropriate group."""
+    if update.message.chat_id == update.effective_user.id:
+        match = re.search(r"GroupID: (-\d+)", update.message.text)
+        if match:
+            group_chat_id = int(match.group(1))
+            message_text = re.sub(r"GroupID: -\d+\n", "", update.message.text)
+            options = re.findall(r"\d️⃣ (.+)", message_text)
 
-    user_data = get_user_by_id(user_id)
-
-    if user_data:
-        profile_message = (
-            f"👤 *{user.first_name}* 【{user_data['faction']}】\n"
-            f"🆔 *ID*: {user_data['user_id']}\n"
-            f"💰 *Units*: {user_data['credits']} 💎\n\n"
-            f"🏆 *Wins*: {user_data['win']}\n"
-            f"💔 *Losses*: {user_data['loss']}\n\n"
-            f"🎖️ *Title*: {user_data['title']}\n"
-        )
-
-        try:
-            photos = await context.bot.get_user_profile_photos(user_id)
-            if photos.photos:
-                photo = photos.photos[0][0].file_id
-                await update.message.reply_photo(photo=photo, caption=profile_message)
+            if options and len(options) == 3:
+                keyboard = [
+                    [KeyboardButton(options[0]), KeyboardButton(options[1])],
+                    [KeyboardButton(options[2]), KeyboardButton("/guess")]
+                ]
+                reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+                sent_message = await context.bot.send_message(
+                    chat_id=group_chat_id,
+                    text="🌟 **Who's That Pokémon?**",
+                    reply_markup=reply_markup,
+                    parse_mode="markdown"
+                )
+                asyncio.create_task(delete_message_later(context, group_chat_id, sent_message.message_id))
             else:
-                await update.message.reply_text(profile_message)
+                logger.warning("Options not properly extracted from message.")
+        else:
+            logger.warning("Group ID not found in the message text.")
+
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message))
+
+async def start_telethon_client():
+    """Start the Telethon client with retry logic."""
+    while True:
+        try:
+            await guess_solver.start()
+            print("Telethon client started. Listening for messages...")
+            break
         except Exception as e:
-            logger.error(f"Error fetching user photo: {e}")
-            await update.message.reply_text(profile_message)
-    else:
-        await update.message.reply_text("You need to start the bot first by using /start.")
+            logger.error(f"Telethon client connection failed: {e}")
+            print("Retrying Telethon client connection in 5 seconds...")
+            await asyncio.sleep(5)
 
+async def start_telegram_bot():
+    """Start the Telegram bot with retry logic."""
+    while True:
+        try:
+            await telegram_app.initialize()
+            print("Telegram Bot Application initialized.")
+            await telegram_app.start_polling()
+            print("Telegram Bot Application started.")
+            break
+        except Exception as e:
+            logger.error(f"Telegram bot connection failed: {e}")
+            print("Retrying Telegram bot connection in 5 seconds...")
+            await asyncio.sleep(5)
 
-async def roulette(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-    user_id = str(user.id)
+async def main():
+    # Run both clients concurrently with retry mechanisms
+    task_telethon = asyncio.create_task(start_telethon_client())
+    task_bot = asyncio.create_task(start_telegram_bot())
 
-    user_data = get_user_by_id(user_id)
+    # Wait for both to run concurrently
+    await asyncio.gather(
+        task_telethon,
+        task_bot,
+    )
 
-    if not user_data:
-        await update.message.reply_text("You need to start the bot first by using /start.")
-        return
-
-    try:
-        bet_amount = int(context.args[0])
-    except (IndexError, ValueError):
-        await update.message.reply_text("Please use the format: /roulette <amount>")
-        return
-
-    if bet_amount <= 0 or bet_amount > user_data["credits"]:
-        await update.message.reply_text("Invalid bet amount or insufficient credits.")
-        return
-
-    result = secrets.choice(["win", "lose"])
-    if result == "win":
-        update_user_credits(user_id, bet_amount * 2)
-        message = f"🎉 You won! Your bet doubled to {bet_amount * 2} units."
-    else:
-        update_user_credits(user_id, -bet_amount)
-        message = f"😞 You lost! {bet_amount} units have been deducted from your profile."
-
-    await update.message.reply_text(message)
-
-async def flip(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-    user_id = str(user.id)
-
-    user_data = get_user_by_id(user_id)
-
-    if not user_data:
-        await update.message.reply_text("You need to start the bot first by using /start.")
-        return
-
-    try:
-        choice = context.args[0].upper()
-        bet_amount = int(context.args[1])
-    except (IndexError, ValueError):
-        await update.message.reply_text("Usage: /flip [H/T] [amount]")
-        return
-
-    if choice not in ["H", "T"]:
-        await update.message.reply_text("Invalid choice. Use 'H' for heads or 'T' for tails.")
-        return
-
-    if bet_amount <= 0 or bet_amount > user_data["credits"]:
-        await update.message.reply_text("Invalid bet amount.")
-        return
-
-    result = random.choice(["H", "T"])
-    if result == choice:
-        update_user_credits(user_id, bet_amount)
-        message = f"🎉 You won! {bet_amount} credits added."
-    else:
-        update_user_credits(user_id, -bet_amount)
-        message = f"😞 You lost! {bet_amount} credits deducted."
-
-    await update.message.reply_text(message)
-
-async def bet(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-    user_id = str(user.id)
-
-    user_data = get_user_by_id(user_id)
-
-    if not user_data:
-        await update.message.reply_text("You need to start the bot first by using /start.")
-        return
-
-    try:
-        bet_amount = int(context.args[0])
-    except (IndexError, ValueError):
-        await update.message.reply_text("Please use the format: /bet <amount>")
-        return
-
-    if bet_amount <= 0 or bet_amount > user_data["credits"]:
-        await update.message.reply_text("Invalid bet amount.")
-        return
-
-    result = secrets.choice(["win", "lose"])
-    if result == "win":
-        update_user_credits(user_id, bet_amount)
-        message = f"You won! {bet_amount} credits have been added to your profile."
-    else:
-        update_user_credits(user_id, -bet_amount)
-        message = f"You lost! {bet_amount} credits have been deducted from your profile."
-
-    await update.message.reply_text(message)
-
-async def dart(update: Update, context: CallbackContext) -> None:
-    user_id = str(update.effective_user.id)
-
-    user_data = get_user_by_id(user_id)
-
-    if not user_data:
-        await update.message.reply_text("You need to start the bot first by using /start.")
-        return
-
-    result = random.choice(["bullseye", "miss"])
-    if result == "bullseye":
-        update_user_credits(user_id, 100)
-        await update.message.reply_text("🎯")  # Send emoji first
-        await update.message.reply_text("Bullseye! You earned 100 credits! 😎")  # Send text message
-    else:
-        update_user_credits(user_id, -100)
-        await update.message.reply_text("🎯")  # Send emoji first
-        await update.message.reply_text("Miss! You lost 100 credits. 😢")  # Send text message
-
-async def basketball(update: Update, context: CallbackContext) -> None:
-    user_id = str(update.effective_user.id)
-
-    user_data = get_user_by_id(user_id)
-
-    if not user_data:
-        await update.message.reply_text("You need to start the bot first by using /start.")
-        return
-
-    result = random.choice(["score", "miss"])
-    if result == "score":
-        update_user_credits(user_id, 75)
-        await update.message.reply_text("🏀")  # Send emoji first
-        await update.message.reply_text("Score! You earned 75 credits! 🏆")  # Send text message
-    else:
-        update_user_credits(user_id, -75)
-        await update.message.reply_text("🏀")  # Send emoji first
-        await update.message.reply_text("Miss! You lost 75 credits. 😞")  # Send text message
-
-
-def main() -> None:
-    # Create the Application and pass the bot token
-    application = Application.builder().token(token).build()
-
-    # Add command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("profile", profile))
-    application.add_handler(CommandHandler("roulette", roulette))
-    application.add_handler(CommandHandler("flip", flip))
-    application.add_handler(CommandHandler("bet", bet))
-    application.add_handler(CommandHandler("dart", dart))
-    application.add_handler(CommandHandler("basketball", basketball))
-    application.add_handler(CommandHandler("pull", pull))
-    application.add_handler(CommandHandler("bag", bag))
-    application.add_handler(CommandHandler('add_primos', add_primos))
-    application.add_handler(CommandHandler("leaderboard", leaderboard))
-    application.add_handler(CommandHandler('drop_primos', drop_primos))
-    application.add_handler(CommandHandler("reset_bag_data", reset_bag_data))
-
-    # Add message handlers
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, reward_primos))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Add callback query handler for inline buttons
-    application.add_handler(CallbackQueryHandler(button))
-
-    application.run_polling()
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    asyncio.run(main())
