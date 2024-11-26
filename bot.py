@@ -1,13 +1,14 @@
+import asyncio
+import logging
 import os
 import random
 import re
-import asyncio
+import threading
 from telethon import events, TelegramClient
 from telethon.tl.types import PhotoStrippedSize
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import Application, MessageHandler, ContextTypes, filters, CommandHandler
 from aiohttp import web
-import logging
 
 # Enable logging
 logging.basicConfig(
@@ -160,50 +161,20 @@ async def cache_pokemon(event):
     except Exception as e:
         logger.error(f"Error caching Pokémon: {e}")
 
-async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Forwards Pokémon guessing messages to the appropriate group."""
-    if update.message.chat_id == update.effective_user.id:
-        match = re.search(r"GroupID: (-\d+)", update.message.text)
-        if match:
-            group_chat_id = int(match.group(1))
-            message_text = re.sub(r"GroupID: -\d+\n", "", update.message.text)
-            options = re.findall(r"\d️⃣ (.+)", message_text)
-
-            if options and len(options) == 3:
-                keyboard = [
-                    [KeyboardButton(options[0]), KeyboardButton(options[1])],
-                    [KeyboardButton(options[2]), KeyboardButton("/guess")]
-                ]
-                reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-                sent_message = await context.bot.send_message(
-                    chat_id=group_chat_id,
-                    text="🌟 **Who's That Pokémon?**",
-                    reply_markup=reply_markup,
-                    parse_mode="markdown"
-                )
-                asyncio.create_task(delete_message_later(context, group_chat_id, sent_message.message_id))
-            else:
-                logger.warning("Options not properly extracted from message.")
-        else:
-            logger.warning("Group ID not found in the message text.")
-
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message))
+# Start Telegram Bot in a separate thread
+def start_telegram_bot():
+    telegram_app.run_polling()
 
 async def main():
     # Initialize and run both clients concurrently
     await guess_solver.start()
     print("Telethon client started. Listening for messages...")
 
-    await telegram_app.initialize()
-    print("Telegram Bot Application initialized.")
+    # Start the Telegram bot in a separate thread to avoid conflicts
+    threading.Thread(target=start_telegram_bot).start()
 
-    await telegram_app.start()
-    print("Telegram Bot Application started.")
-
-    await asyncio.gather(
-        guess_solver.run_until_disconnected(),
-        telegram_app.updater.start_polling(),
-    )
+    # Run health check server in the background
+    await start_health_server()
 
 if __name__ == "__main__":
     asyncio.run(main())
