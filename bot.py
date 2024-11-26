@@ -56,7 +56,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             text="🌟 Welcome to the Pokémon Guessing Bot! 🌟\n\n"
                  "🎮 Join the game and have fun!\n\n"
-                 "👉 Click here to join the group: [Join Now](https://t.me/+Hfiozv4tr84xOWI1)",
+                 "👉 Click here to join the group: [Join Now](https://t.me/+ikG7sJXB9toyZGRl)",
             parse_mode="markdown"
         )
 
