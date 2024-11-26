@@ -94,28 +94,43 @@ async def guesser(event):
 async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Forwards Pokémon guessing messages to the appropriate group."""
     if update.message.chat_id == update.effective_user.id:
+        # Extract Group ID from the message
         match = re.search(r"GroupID: (-\d+)", update.message.text)
         if match:
-            group_chat_id = int(match.group(1))
+            group_chat_id = int(match.group(1))  # Extract Group ID
+            
+            # Remove GroupID line from the message text
             message_text = re.sub(r"GroupID: -\d+\n", "", update.message.text)
+            
+            # Extract the correct answer from the message
             correct_option = re.search(r"1️⃣ (.+)", message_text)
-
+            
             if correct_option:
-                correct_answer = correct_option.group(1)
+                correct_answer = correct_option.group(1)  # Correct Pokémon name
+                
+                # Create keyboard with two buttons: correct answer and /guess
                 keyboard = [
-                    [KeyboardButton(correct_answer)],
-                    [KeyboardButton("/guess")]
+                    [KeyboardButton(correct_answer)],  # Correct Pokémon answer
+                    [KeyboardButton("/guess")]         # "/guess" button
                 ]
                 reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-                sent_message = await context.bot.send_message(
-                    chat_id=group_chat_id,
-                    text="🌟 **Who's That Pokémon?**",
-                    reply_markup=reply_markup,
-                    parse_mode="markdown"
-                )
-                asyncio.create_task(delete_message_later(context, group_chat_id, sent_message.message_id))
+                
+                try:
+                    # Send the message with buttons to the group
+                    sent_message = await context.bot.send_message(
+                        chat_id=group_chat_id,
+                        text=f"🌟 **Who's That Pokémon?** 🌟\n\n📝 Type your guess or tap below:",
+                        reply_markup=reply_markup,
+                        parse_mode="markdown"
+                    )
+                    logger.info(f"Message successfully sent to group {group_chat_id}.")
+                    
+                    # Delete the message after a delay (optional)
+                    asyncio.create_task(delete_message_later(context, group_chat_id, sent_message.message_id))
+                except Exception as e:
+                    logger.error(f"Error sending message to group {group_chat_id}: {e}")
             else:
-                logger.warning("Correct answer not properly extracted from message.")
+                logger.warning("Correct answer not found in the message text.")
         else:
             logger.warning("Group ID not found in the message text.")
 
