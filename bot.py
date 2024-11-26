@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Environment Variables
 API_ID = int(os.getenv("API_ID", "2282111"))
-API_HASH = os.getenv("API_HASH", "da58a1841a16c352a2a999171bbabcad")
+API_HASH = os.getenv("API_HASH", "da58a1841a16c352a2a999171bbabcad"))
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7357384521:AAE3oiVuRsJ92_REDYnH49f1zJdVYKLy0hE")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@hexaguess420_bot")
 CHAT_IDS = [-1002450653337]
@@ -34,7 +34,6 @@ guess_solver = TelegramClient("temp", API_ID, API_HASH)
 
 # Initialize Telegram Bot API Application
 telegram_app = Application.builder().token(BOT_TOKEN).build()
-
 
 def sanitize_filename(name):
     """Remove invalid characters from filenames."""
