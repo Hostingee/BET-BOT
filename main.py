@@ -6,7 +6,6 @@ from telethon.tl.types import PhotoStrippedSize
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import Application, MessageHandler, ContextTypes, CommandHandler, filters
 import logging
-from aiohttp import web
 
 # Enable logging
 logging.basicConfig(
