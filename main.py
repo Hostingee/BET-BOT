@@ -177,16 +177,6 @@ async def health_check(request):
     return web.Response(text="OK", status=200)
 
 
-async def start_health_server():
-    """Starts a lightweight HTTP server for health checks."""
-    app = web.Application()
-    app.add_routes([web.get("/", health_check)])  # Responds to GET requests on '/'
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8000)  # Listen on port 8000
-    await site.start()
-    logger.info("Health check server running on port 8000")
-
 
 async def main():
     telegram_app.add_handler(CommandHandler("start", start_command))
@@ -194,9 +184,6 @@ async def main():
 
     task_telethon = asyncio.create_task(start_telethon_client())
     task_bot = asyncio.create_task(start_telegram_bot())
-    task_health_check = asyncio.create_task(start_health_server())
-
-    await asyncio.gather(task_telethon, task_bot, task_health_check)
     await asyncio.gather(guess_solver.run_until_disconnected(), telegram_app.updater.start_polling())
 
 
