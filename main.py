@@ -104,8 +104,8 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if correct_option:
                 correct_answer = correct_option.group(1)
                 keyboard = [
-                    [KeyboardButton(correct_answer)],[KeyboardButton("/guess")]
-                    
+                    [KeyboardButton(correct_answer)],
+                    [KeyboardButton("/guess")]
                 ]
                 reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -158,34 +158,14 @@ async def start_telethon_client():
             await asyncio.sleep(5)
 
 
-async def start_telegram_bot():
-    """Start the Telegram bot with retry logic."""
-    while True:
-        try:
-            await telegram_app.initialize()
-            logger.info("Telegram Bot Application initialized.")
-            await telegram_app.start()
-            logger.info("Telegram Bot Application started.")
-            break
-        except Exception as e:
-            logger.error(f"Telegram bot connection failed: {e}")
-            await asyncio.sleep(5)
-
-
-async def health_check(request):
-    """Health check endpoint."""
-    return web.Response(text="OK", status=200)
-
-
-
 async def main():
     telegram_app.add_handler(CommandHandler("start", start_command))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message))
 
+    # Start the Telethon client and Telegram bot
     task_telethon = asyncio.create_task(start_telethon_client())
-    task_bot = asyncio.create_task(start_telegram_bot())
-    await asyncio.gather(guess_solver.run_until_disconnected(), telegram_app.updater.start_polling())
+    await asyncio.gather(task_telethon, telegram_app.run_polling())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+   
