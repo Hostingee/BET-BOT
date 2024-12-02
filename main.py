@@ -6,6 +6,7 @@ from telethon.tl.types import PhotoStrippedSize
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import Application, MessageHandler, ContextTypes, CommandHandler, filters
 import logging
+from aiohttp import web
 
 # Enable logging
 logging.basicConfig(
@@ -19,7 +20,7 @@ API_ID = int(os.getenv("API_ID", "2282111"))
 API_HASH = os.getenv("API_HASH", "da58a1841a16c352a2a999171bbabcad")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7357384521:AAEELUVDMZzdrBlEaphntKxWB9zM9hl7yyk")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@hexaguess420_bot")
-CHAT_IDS = [-1002450653337, -1002329043138]
+CHAT_IDS = [-1002450653337, -1001841981503, -1002085699447]
 
 # Directories
 TEMP_CACHE_DIR = "BET BOT/cache"
@@ -104,8 +105,8 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if correct_option:
                 correct_answer = correct_option.group(1)
                 keyboard = [
-                    [KeyboardButton(correct_answer)], [KeyboardButton("/guess")]
-
+                    [KeyboardButton(correct_answer)],[KeyboardButton("/guess")]
+                    
                 ]
                 reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -172,21 +173,33 @@ async def start_telegram_bot():
             await asyncio.sleep(5)
 
 
+async def health_check(request):
+    """Health check endpoint."""
+    return web.Response(text="OK", status=200)
+
+
+async def start_health_server():
+    """Starts a lightweight HTTP server for health checks."""
+    app = web.Application()
+    app.add_routes([web.get("/", health_check)])  # Responds to GET requests on '/'
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 8000)  # Listen on port 8000
+    await site.start()
+    logger.info("Health check server running on port 8000")
+
+
 async def main():
     telegram_app.add_handler(CommandHandler("start", start_command))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_message))
 
     task_telethon = asyncio.create_task(start_telethon_client())
-    task_bot = asyncio.create_task(telegram_app.run_polling())
-    await asyncio.gather(task_telethon, task_bot)
+    task_bot = asyncio.create_task(start_telegram_bot())
+    task_health_check = asyncio.create_task(start_health_server())
+
+    await asyncio.gather(task_telethon, task_bot, task_health_check)
+    await asyncio.gather(guess_solver.run_until_disconnected(), telegram_app.updater.start_polling())
 
 
 if __name__ == "__main__":
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(main())
-        else:
-            asyncio.run(main())
-    except RuntimeError:
-        asyncio.run(main())
+    asyncio.run(main())
