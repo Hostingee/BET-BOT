@@ -164,10 +164,10 @@ async def main():
 
     # Start the Telethon client and Telegram bot
     task_telethon = asyncio.create_task(start_telethon_client())
-    task_bot = asyncio.create_task(telegram_app.run_polling())  # Added task for bot
-    await asyncio.gather(task_telethon, task_bot)  # Ensured all tasks are awaited
-
+    task_bot = asyncio.create_task(telegram_app.run_polling())
+    await asyncio.gather(task_telethon, task_bot)
 
 
 if __name__ == "__main__":
-   
+    asyncio.run(main())
+
